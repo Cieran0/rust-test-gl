@@ -4,6 +4,7 @@ use std::fs;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::ptr;
 
+use glam::Vec4;
 use x11rb::connection::Connection;
 use x11rb::protocol::{xproto::*, Event};
 use x11rb::rust_connection::RustConnection;
@@ -207,15 +208,15 @@ unsafe fn create_shader_program() -> u32 { unsafe {
 
 /// === Step 5: Setup VAO/VBO for geometry ===
 unsafe fn setup_geometry() -> (u32, [u32; 2]) { unsafe {
-    let positions: [f32; 12] = [
-        0.75, 0.75, 0.0, 1.0,
-        0.75, -0.75, 0.0, 1.0,
-        -0.75, -0.75, 0.0, 1.0,
+    let positions = [
+        Vec4::new( 0.75,  0.75, 0.0, 1.0),
+        Vec4::new( 0.75, -0.75, 0.0, 1.0),
+        Vec4::new(-0.75, -0.75, 0.0, 1.0),
     ];
-    let colors: [f32; 12] = [
-        1.0, 1.0, 1.0, 1.0,
-        0.0, 1.0, 0.0, 1.0,
-        0.0, 0.0, 1.0, 1.0,
+    let colors = [
+        Vec4::new(1.0, 1.0, 1.0, 1.0),
+        Vec4::new(0.0, 1.0, 0.0, 1.0),
+        Vec4::new(0.0, 0.0, 1.0, 1.0),
     ];
 
     let mut vao = 0;
@@ -224,20 +225,22 @@ unsafe fn setup_geometry() -> (u32, [u32; 2]) { unsafe {
     gl::GenBuffers(2, vbo.as_mut_ptr());
     gl::BindVertexArray(vao);
 
+    // Position buffer
     gl::BindBuffer(gl::ARRAY_BUFFER, vbo[0]);
     gl::BufferData(
         gl::ARRAY_BUFFER,
-        (positions.len() * 4) as isize,
+        std::mem::size_of_val(&positions) as isize,
         positions.as_ptr() as *const _,
         gl::STATIC_DRAW,
     );
     gl::VertexAttribPointer(0, 4, gl::FLOAT, gl::FALSE, 0, ptr::null());
     gl::EnableVertexAttribArray(0);
 
+    // Color buffer
     gl::BindBuffer(gl::ARRAY_BUFFER, vbo[1]);
     gl::BufferData(
         gl::ARRAY_BUFFER,
-        (colors.len() * 4) as isize,
+        std::mem::size_of_val(&colors) as isize,
         colors.as_ptr() as *const _,
         gl::STATIC_DRAW,
     );
