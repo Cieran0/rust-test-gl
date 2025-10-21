@@ -1,101 +1,114 @@
+use std::ffi::CString;
 use std::os::raw::{c_int, c_void};
 
-use x11rb::{connection::Connection, protocol::{xproto::{ConnectionExt, *}, Event}, rust_connection::RustConnection, wrapper::ConnectionExt as _};
+use crate::{x11, glx};
 
-use crate::{glx, x11};
+pub fn create(dpy: *mut c_void, width: u16, height: u16) -> Result<x11::Window, Box<dyn std::error::Error>> {
+    unsafe {
+        let screen = x11::XDefaultScreen(dpy);
+        let root = x11::XDefaultRootWindow(dpy);
 
+        let fb_attrs = [
+            glx::X_RENDERABLE, 1,
+            glx::DRAWABLE_TYPE, glx::WINDOW_BIT,
+            glx::RENDER_TYPE, glx::RGBA_BIT,
+            glx::RED_SIZE, 8,
+            glx::GREEN_SIZE, 8,
+            glx::BLUE_SIZE, 8,
+            glx::ALPHA_SIZE, 8,
+            glx::DEPTH_SIZE, 24,
+            glx::DOUBLEBUFFER, 1,
+            0,
+        ];
 
-pub fn create(dpy: *mut c_void, width: u16, height: u16) -> Result<(RustConnection, u32), Box<dyn std::error::Error>> {
-    let (conn, screen_num) = RustConnection::connect(None)?;
-    let screen = &conn.setup().roots[screen_num];
+        let mut nelements: c_int = 0;
+        let fbconfigs = glx::glXChooseFBConfig(dpy, screen, fb_attrs.as_ptr(), &mut nelements);
+        assert!(!fbconfigs.is_null() && nelements > 0, "No FBConfig found");
+        let fbconfig = *fbconfigs.add(0);
 
-    let screen_id = unsafe { x11::XDefaultScreen(dpy) };
-    let fb_attrs = [
-        glx::X_RENDERABLE, 1,
-        glx::DRAWABLE_TYPE, glx::WINDOW_BIT,
-        glx::RENDER_TYPE, glx::RGBA_BIT,
-        glx::RED_SIZE, 8,
-        glx::GREEN_SIZE, 8,
-        glx::BLUE_SIZE, 8,
-        glx::ALPHA_SIZE, 8,
-        glx::DEPTH_SIZE, 24,
-        glx::DOUBLEBUFFER, 1,
-        0,
-    ];
+        let visual_info_ptr = glx::glXGetVisualFromFBConfig(dpy, fbconfig);
+        assert!(!visual_info_ptr.is_null(), "No visual from FBConfig");
+        let visual_info: x11::XVisualInfo = *visual_info_ptr;
 
-    let mut nelements: c_int = 0;
-    let fbconfigs = unsafe { glx::glXChooseFBConfig(dpy, screen_id, fb_attrs.as_ptr(), &mut nelements) };
-    assert!(!fbconfigs.is_null() && nelements > 0, "No FBConfig found");
-    let fbconfig = unsafe { *fbconfigs.add(0) };
+        let cmap = x11::XCreateColormap(dpy, root, visual_info.visual, 0);
 
-    let visual_info = unsafe { glx::glXGetVisualFromFBConfig(dpy, fbconfig) };
-    assert!(!visual_info.is_null(), "No visual info found");
+        let mut attr = x11::XSetWindowAttributes {
+            background_pixel: x11::XWhitePixel(dpy, screen),
+            colormap: cmap,
+            event_mask: x11::KEY_PRESS_MASK
+                | x11::KEY_RELEASE_MASK
+                | x11::BUTTON_PRESS_MASK
+                | x11::BUTTON_RELEASE_MASK
+                | x11::POINTER_MOTION_MASK
+                | x11::EXPOSURE_MASK
+                | x11::STRUCTURE_NOTIFY_MASK,
+            ..std::mem::zeroed()
+        };
 
-    let window = conn.generate_id()?;
+        let valuemask = x11::CWCOLORMAP | x11::CWEVENT_MASK;
 
-    let colormap = conn.generate_id()?;
-    conn.create_colormap(ColormapAlloc::NONE, colormap, screen.root, unsafe { (*visual_info).visualid.try_into().unwrap() })?;
+        let window = x11::XCreateWindow(
+            dpy,
+            root,
+            100,
+            100,
+            width as u32,
+            height as u32,
+            0,
+            visual_info.depth,
+            x11::INPUT_OUTPUT,
+            visual_info.visual,
+            valuemask,
+            &mut attr,
+        );
 
-    let depth = unsafe { (*visual_info).depth as u8 };
-    let visualid = unsafe { (*visual_info).visualid };
+        let title = CString::new("GL Test").unwrap();
+        x11::XStoreName(dpy, window, title.as_ptr());
 
-    let event_mask = EventMask::EXPOSURE
-    | EventMask::STRUCTURE_NOTIFY
-    | EventMask::KEY_PRESS
-    | EventMask::KEY_RELEASE
-    | EventMask::BUTTON_PRESS
-    | EventMask::BUTTON_RELEASE
-    | EventMask::POINTER_MOTION;
+        let net_wm_name = x11::XInternAtom(dpy, b"_NET_WM_NAME\0".as_ptr() as _, 0);
+        let utf8_string = x11::XInternAtom(dpy, b"UTF8_STRING\0".as_ptr() as _, 0);
+        x11::XChangeProperty(
+            dpy,
+            window,
+            net_wm_name,
+            utf8_string,
+            8,
+            x11::PROP_MODE_REPLACE,
+            b"GL Test".as_ptr(),
+            7,
+        );
 
-    conn.create_window(
-        depth,
-        window,
-        screen.root,
-        1280, 720,
-        width,
-        height,
-        0,
-        WindowClass::INPUT_OUTPUT,
-        visualid.try_into().unwrap(),
-        &CreateWindowAux::new()
-            .colormap(colormap)
-            .background_pixel(screen.white_pixel)
-            .event_mask(event_mask),
-    )?;
+        let net_wm_window_type = x11::XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE\0".as_ptr() as _, 0);
+        let net_wm_window_type_dialog =
+            x11::XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_DIALOG\0".as_ptr() as _, 0);
+        x11::XChangeProperty(
+            dpy,
+            window,
+            net_wm_window_type,
+            4,
+            32,
+            0,
+            &net_wm_window_type_dialog as *const _ as *const u8,
+            1,
+        );
 
-    let net_wm_name = conn.intern_atom(false, b"_NET_WM_NAME")?.reply()?.atom;
-    let utf8_string = conn.intern_atom(false, b"UTF8_STRING")?.reply()?.atom;
-    conn.change_property8(
-        x11rb::protocol::xproto::PropMode::REPLACE,
-        window,
-        net_wm_name,
-        utf8_string,
-        b"GL Test",
-    )?;
+        x11::XMapWindow(dpy, window);
 
-    let net_wm_window_type = conn.intern_atom(false, b"_NET_WM_WINDOW_TYPE")?.reply()?.atom;
-    let net_wm_window_type_dialog = conn.intern_atom(false, b"_NET_WM_WINDOW_TYPE_DIALOG")?.reply()?.atom;
-    conn.change_property32(
-        x11rb::protocol::xproto::PropMode::REPLACE,
-        window,
-        net_wm_window_type,
-        AtomEnum::ATOM,
-        &[net_wm_window_type_dialog],
-    )?;
-
-    conn.map_window(window)?;
-    conn.flush()?;
-
-    loop {
-        if let Some(event) = conn.poll_for_event()? {
-            if let Event::MapNotify(ev) = event {
-                if ev.window == window {
+        loop {
+            let mut ev: x11::XEvent = std::mem::zeroed();
+            x11::XNextEvent(dpy, &mut ev);
+            if ev.event_type() == x11::MAP_NOTIFY {
+                let map_ev: &x11::XMapEvent = std::mem::transmute(&ev.data);
+                if map_ev.window == window {
                     break;
                 }
             }
         }
-    }
 
-    println!("X11 window created via x11rb (id: {window})");
-    Ok((conn, window))
+        x11::XFree(visual_info_ptr as *mut c_void);
+        x11::XFree(fbconfigs as *mut c_void);
+
+        println!("X11 window created via raw Xlib (id: {window})");
+        Ok(window)
+    }
 }

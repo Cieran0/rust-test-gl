@@ -18,6 +18,8 @@ pub const CONTEXT_MINOR_VERSION_ARB: c_int = 0x2092;
 pub const CONTEXT_PROFILE_MASK_ARB: c_int = 0x9126;
 pub const CONTEXT_CORE_PROFILE_BIT_ARB: c_int = 0x00000001;
 
+const DIRECT_RENDERING: i32 = 1;
+
 #[link(name = "GL")]
 unsafe extern "C" {
     pub unsafe fn glXChooseFBConfig(
@@ -26,13 +28,20 @@ unsafe extern "C" {
         attrib_list: *const c_int,
         nelements: *mut c_int,
     ) -> *mut *mut c_void;
-    pub unsafe fn glXGetVisualFromFBConfig(dpy: *mut c_void, config: *mut c_void) -> *mut x11::VisualInfo;
+    pub unsafe fn glXGetVisualFromFBConfig(dpy: *mut c_void, config: *mut c_void) -> *mut x11::XVisualInfo;
     pub unsafe fn glXGetProcAddress(procName: *const c_uchar) -> *mut c_void;
-    pub unsafe fn glXMakeCurrent(dpy: *mut c_void, drawable: u32, ctx: *mut c_void) -> c_int;
-    pub unsafe fn glXSwapBuffers(dpy: *mut c_void, drawable: u32);
+    pub unsafe fn glXCreateContext(
+        dpy: *mut c_void,
+        visual: *mut c_void,
+        share_list: *mut c_void,
+        direct: c_int,
+    ) -> *mut c_void;
+    pub unsafe fn glXMakeCurrent(dpy: *mut c_void, drawable: x11::Window, ctx: *mut c_void) -> c_int;
+    pub unsafe fn glXSwapBuffers(dpy: *mut c_void, drawable: x11::Window);
+    pub unsafe fn glXDestroyContext(dpy: *mut c_void, ctx: *mut c_void);
 }
 
-pub fn create_gl_context(dpy: *mut c_void, window: u32) -> *mut c_void {
+pub fn create_gl_context(dpy: *mut c_void, window: x11::Window) -> *mut c_void {
     unsafe {
         let screen_id = x11::XDefaultScreen(dpy);
 
@@ -57,8 +66,16 @@ pub fn create_gl_context(dpy: *mut c_void, window: u32) -> *mut c_void {
 
         let proc_name = b"glXCreateContextAttribsARB\0";
         let ptr = glXGetProcAddress(proc_name.as_ptr());
+        if ptr.is_null() {
+            panic!("glXCreateContextAttribsARB not supported");
+        }
+
         let create_context_arb: extern "C" fn(
-            *mut c_void, *mut c_void, *mut c_void, c_int, *const c_int
+            *mut c_void,
+            *mut c_void,
+            *mut c_void,
+            c_int,
+            *const c_int,
         ) -> *mut c_void = std::mem::transmute(ptr);
 
         let ctx_attribs = [
@@ -68,11 +85,19 @@ pub fn create_gl_context(dpy: *mut c_void, window: u32) -> *mut c_void {
             0,
         ];
 
-        let ctx = create_context_arb(dpy, fbconfig, ptr::null_mut(), 1, ctx_attribs.as_ptr());
+        let ctx = create_context_arb(
+            dpy,
+            fbconfig,
+            ptr::null_mut(),
+            DIRECT_RENDERING,
+            ctx_attribs.as_ptr(),
+        );
         assert!(!ctx.is_null(), "Failed to create OpenGL 4.2 core context");
 
         let make_current_ret = glXMakeCurrent(dpy, window, ctx);
         assert!(make_current_ret != 0, "Failed to make GL context current");
+
+        x11::XFree(fbconfigs as *mut c_void);
 
         println!("OpenGL 4.2 context current");
         ctx
