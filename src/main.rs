@@ -181,18 +181,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
     println!("Entering main loop... (Press Escape to exit, W/S to adjust speed)");
 
     let mut cam: Camera = Camera::default();
-
-    let mut angle_x: f32 = 0.0;
-    let mut angle_y: f32 = 0.0;
-    let mut angle_z: f32 = 0.0;
-
-    let mut scale_x: f32 = 1.0;
-    let mut scale_y: f32 = 1.0;
-    let mut scale_z: f32 = 1.0;
-
-    let mut trans_x: f32 = 0.0;
-    let mut trans_y: f32 = 0.0;
-    let trans_z: f32 = 0.0;
+    
+    let mut angle: Vec3 = Vec3::splat(0.0);
+    let mut scale: Vec3 = Vec3::splat(1.0);
+    let mut trans: Vec3 = Vec3::splat(0.0);
 
     let mut rotation_speed: f32 = 0.0;
     let mut last_time = std::time::Instant::now();
@@ -242,16 +234,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
                         39 => cam.z += 0.01, // S
                         38 => cam.x -= 0.01, // A
                         40 => cam.x += 0.01, // D
-                        53 => scale_x += 0.1, // X
-                        29 => scale_y += 0.1, // Y
-                        52 => scale_z += 0.1, // Z
-                        111 => trans_y += 0.1, // Up
-                        116 => trans_y -= 0.1, // Down
-                        113 => trans_x -= 0.1, // Left
-                        114 => trans_x += 0.1, // Right
+                        53 => scale.x += 0.1, // X
+                        29 => scale.y += 0.1, // Y
+                        52 => scale.z += 0.1, // Z
+                        111 => trans.y += 0.1, // Up
+                        116 => trans.y -= 0.1, // Down
+                        113 => trans.x -= 0.1, // Left
+                        114 => trans.x += 0.1, // Right
                         48 => rotation_speed += 0.1, // @
                         51 => rotation_speed -= 0.1, // #
-                        27 => cam = Camera::default(), // R
+                        27 => { 
+                            cam = Camera::default();
+                            angle = Vec3::splat(0.0);
+                            scale = Vec3::splat(1.0);
+                            trans = Vec3::splat(0.0);
+                            rotation_speed = 0.0;
+                        }, // R
                         key => {
                             println!("Pressed: {}", key)
                         }
@@ -288,9 +286,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
         let delta = now.duration_since(last_time).as_secs_f32();
         last_time = now;
 
-        angle_x += rotation_speed * delta;
-        angle_y += rotation_speed * delta;
-        angle_z += rotation_speed * delta;
+        angle.x += rotation_speed * delta;
+        angle.y += rotation_speed * delta;
+        angle.z += rotation_speed * delta;
 
         gl::ClearColor(0.0, 0.0, 0.0, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -335,12 +333,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
             gl::BindVertexArray(vao);
             
             push(&mut stack);
-            apply(&mut stack, Mat4::from_translation(Vec3::new(trans_x, trans_y, trans_z)));
+            apply(&mut stack, Mat4::from_translation(trans));
             apply(&mut stack, Mat4::from_translation(Vec3::new(-0.5, 0.0, 0.0)));
-            apply(&mut stack, Mat4::from_scale(Vec3::new(scale_x, scale_y, scale_z)));
-            apply(&mut stack, Mat4::from_rotation_x(-angle_x));
-            apply(&mut stack, Mat4::from_rotation_y(angle_y));
-            apply(&mut stack, Mat4::from_rotation_z(angle_z));
+            apply(&mut stack, Mat4::from_scale(scale));
+            apply(&mut stack, Mat4::from_rotation_x(-angle.x));
+            apply(&mut stack, Mat4::from_rotation_y(angle.y));
+            apply(&mut stack, Mat4::from_rotation_z(angle.z));
 
             gl::UniformMatrix4fv(model_loc, 1, gl::FALSE, stack.last().unwrap().to_cols_array().as_ptr());
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
@@ -348,10 +346,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
 
             push(&mut stack);
             apply(&mut stack, Mat4::from_translation(Vec3::new(0.5, 0.0, 0.0)));
-            apply(&mut stack, Mat4::from_scale(Vec3::new(scale_x, scale_y, scale_z)));
-            apply(&mut stack, Mat4::from_rotation_x(-angle_x));
-            apply(&mut stack, Mat4::from_rotation_y(angle_y));
-            apply(&mut stack, Mat4::from_rotation_z(angle_z));
+            apply(&mut stack, Mat4::from_scale(scale));
+            apply(&mut stack, Mat4::from_rotation_x(-angle.x));
+            apply(&mut stack, Mat4::from_rotation_y(angle.y));
+            apply(&mut stack, Mat4::from_rotation_z(angle.z));
 
             gl::UniformMatrix4fv(model_loc, 1, gl::FALSE, stack.last().unwrap().to_cols_array().as_ptr());
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
