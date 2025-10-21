@@ -139,6 +139,27 @@ fn setup_geometry() -> (u32, [u32; 2]) { unsafe {
 const TARGET_FPS: u64 = 60;
 const FRAME_TIME: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / TARGET_FPS);
 
+struct Camera {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self { 
+            x: 0f32, 
+            y: 0f32, 
+            z: 2f32, 
+            yaw: -std::f32::consts::FRAC_PI_2, 
+            pitch: 0f32
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
     let dpy = x11::XOpenDisplay(std::ptr::null());
     assert!(!dpy.is_null(), "Cannot open X display");
@@ -159,9 +180,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
 
     println!("Entering main loop... (Press Escape to exit, W/S to adjust speed)");
 
-    let mut cam_x: f32 = 0.0;
-    let cam_y: f32 = 0.0;
-    let mut cam_z: f32 = 1.0;
+    let mut cam: Camera = Camera::default();
 
     let mut angle_x: f32 = 0.0;
     let mut angle_y: f32 = 0.0;
@@ -182,8 +201,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
     let mut mouse_x_abs = i16::MIN;
     let mut mouse_y_abs = i16::MIN;
 
-    let mut yaw: f32 = -std::f32::consts::FRAC_PI_2;
-    let mut pitch: f32 = 0.0;
 
     loop {
         while let Some(event) = conn.poll_for_event()? {
@@ -196,8 +213,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
                                 println!("Mouse down!")
                             }
                         }
-                        4 => cam_z += 0.1,
-                        5 => cam_z -= 0.1,
+                        4 => cam.z += 0.1,
+                        5 => cam.z -= 0.1,
                         button => {
                             println!("Button: {}", button)
                         }
@@ -221,10 +238,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
                 Event::KeyPress(ev) => {
                     match ev.detail {
                         9 => return Ok(()), // Escape
-                        25 => cam_z -= 0.01, // W
-                        39 => cam_z += 0.01, // S
-                        38 => cam_x -= 0.01, // A
-                        40 => cam_x += 0.01, // D
+                        25 => cam.z -= 0.01, // W
+                        39 => cam.z += 0.01, // S
+                        38 => cam.x -= 0.01, // A
+                        40 => cam.x += 0.01, // D
                         53 => scale_x += 0.1, // X
                         29 => scale_y += 0.1, // Y
                         52 => scale_z += 0.1, // Z
@@ -234,6 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
                         114 => trans_x += 0.1, // Right
                         48 => rotation_speed += 0.1, // @
                         51 => rotation_speed -= 0.1, // #
+                        27 => cam = Camera::default(), // R
                         key => {
                             println!("Pressed: {}", key)
                         }
@@ -255,8 +273,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
                     let delta_mouse_x = -(ev.event_x - mouse_x_abs);
                     let delta_mouse_y = ev.event_y - mouse_y_abs;
 
-                    yaw -= delta_mouse_x as f32 * SENSITIVITY;
-                    pitch -= delta_mouse_y as f32 * SENSITIVITY;
+                    cam.yaw -= delta_mouse_x as f32 * SENSITIVITY;
+                    cam.pitch -= delta_mouse_y as f32 * SENSITIVITY;
 
                     mouse_x_abs=ev.event_x;
                     mouse_y_abs=ev.event_y;
@@ -280,12 +298,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
 
         if view_loc != -1 {
             let front = Vec3::new(
-                yaw.cos() * pitch.cos(),
-                pitch.sin(),
-                yaw.sin() * pitch.cos(),
+                cam.yaw.cos() * cam.pitch.cos(),
+                cam.pitch.sin(),
+                cam.yaw.sin() * cam.pitch.cos(),
             ).normalize();
 
-            let eye = Vec3::new(cam_x, cam_y, cam_z);
+            let eye = Vec3::new(cam.x, cam.y, cam.z);
             let center = eye + front;
 
             let up = Vec3::new(0.0, 1.0, 0.0);
