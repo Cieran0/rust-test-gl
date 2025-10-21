@@ -5,7 +5,7 @@ use x11rb::{connection::Connection, protocol::{xproto::{ConnectionExt, *}, Event
 use crate::{glx, x11};
 
 
-pub fn create(dpy: *mut c_void) -> Result<(RustConnection, u32), Box<dyn std::error::Error>> {
+pub fn create(dpy: *mut c_void, width: u16, height: u16) -> Result<(RustConnection, u32), Box<dyn std::error::Error>> {
     let (conn, screen_num) = RustConnection::connect(None)?;
     let screen = &conn.setup().roots[screen_num];
 
@@ -32,14 +32,20 @@ pub fn create(dpy: *mut c_void) -> Result<(RustConnection, u32), Box<dyn std::er
     assert!(!visual_info.is_null(), "No visual info found");
 
     let window = conn.generate_id()?;
-    let width = 1024u16;
-    let height = 768u16;
 
     let colormap = conn.generate_id()?;
     conn.create_colormap(ColormapAlloc::NONE, colormap, screen.root, unsafe { (*visual_info).visualid.try_into().unwrap() })?;
 
     let depth = unsafe { (*visual_info).depth as u8 };
     let visualid = unsafe { (*visual_info).visualid };
+
+    let event_mask = EventMask::EXPOSURE
+    | EventMask::STRUCTURE_NOTIFY
+    | EventMask::KEY_PRESS
+    | EventMask::KEY_RELEASE
+    | EventMask::BUTTON_PRESS
+    | EventMask::BUTTON_RELEASE
+    | EventMask::POINTER_MOTION;
 
     conn.create_window(
         depth,
@@ -54,7 +60,7 @@ pub fn create(dpy: *mut c_void) -> Result<(RustConnection, u32), Box<dyn std::er
         &CreateWindowAux::new()
             .colormap(colormap)
             .background_pixel(screen.white_pixel)
-            .event_mask(EventMask::KEY_PRESS | EventMask::STRUCTURE_NOTIFY),
+            .event_mask(event_mask),
     )?;
 
     let net_wm_name = conn.intern_atom(false, b"_NET_WM_NAME")?.reply()?.atom;

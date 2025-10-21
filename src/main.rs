@@ -5,6 +5,8 @@ pub mod shader;
 
 extern crate gl;
 
+use std::i16;
+
 use glam::{Mat4, Vec3, Vec4};
 use x11rb::connection::Connection;
 use x11rb::protocol::Event;
@@ -141,7 +143,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
     let dpy = x11::XOpenDisplay(std::ptr::null());
     assert!(!dpy.is_null(), "Cannot open X display");
 
-    let (conn, window) = window::create(dpy)?;
+    const WIDTH: u16 = 1920;
+    const HEIGHT: u16 = 1080;
+
+    let (conn, window) = window::create(dpy, WIDTH, HEIGHT)?;
     let _ctx = glx::create_gl_context(dpy, window);
     glx::init_gl_functions();
     gl::Enable(gl::DEPTH_TEST);
@@ -154,9 +159,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
 
     println!("Entering main loop... (Press Escape to exit, W/S to adjust speed)");
 
-    let cam_x: f32 = 0.0;
+    let mut cam_x: f32 = 0.0;
     let cam_y: f32 = 0.0;
-    let cam_z: f32 = 1.0;
+    let mut cam_z: f32 = 1.0;
 
     let mut angle_x: f32 = 0.0;
     let mut angle_y: f32 = 0.0;
@@ -173,14 +178,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
     let mut rotation_speed: f32 = 0.0;
     let mut last_time = std::time::Instant::now();
 
+    let mut mouse_held: bool = false;
+    let mut mouse_x_abs = i16::MIN;
+    let mut mouse_y_abs = i16::MIN;
+
+    let mut yaw: f32 = -std::f32::consts::FRAC_PI_2;
+    let mut pitch: f32 = 0.0;
+
     loop {
         while let Some(event) = conn.poll_for_event()? {
             match event {
+                Event::ButtonPress(ev) => {
+                    match ev.detail { 
+                        1 => {
+                            if !mouse_held {
+                                mouse_held = true;
+                                println!("Mouse down!")
+                            }
+                        }
+                        4 => cam_z += 0.1,
+                        5 => cam_z -= 0.1,
+                        button => {
+                            println!("Button: {}", button)
+                        }
+                    }
+                }
+                Event::ButtonRelease(ev) => {
+                    match ev.detail { 
+                        1 => {
+                            if mouse_held {
+                                mouse_held = false;
+                                mouse_x_abs = i16::MIN;
+                                mouse_y_abs = i16::MIN;
+                                println!("Mouse up!")
+                            }
+                        }
+                        button => {
+                            println!("Button: {}", button)
+                        }
+                    }
+                }
                 Event::KeyPress(ev) => {
                     match ev.detail {
                         9 => return Ok(()), // Escape
-                        25 => rotation_speed += 0.1, // W
-                        39 => rotation_speed -= 0.1, // S
+                        25 => cam_z -= 0.01, // W
+                        39 => cam_z += 0.01, // S
+                        38 => cam_x -= 0.01, // A
+                        40 => cam_x += 0.01, // D
                         53 => scale_x += 0.1, // X
                         29 => scale_y += 0.1, // Y
                         52 => scale_z += 0.1, // Z
@@ -188,10 +232,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
                         116 => trans_y -= 0.1, // Down
                         113 => trans_x -= 0.1, // Left
                         114 => trans_x += 0.1, // Right
+                        48 => rotation_speed += 0.1, // @
+                        51 => rotation_speed -= 0.1, // #
                         key => {
                             println!("Pressed: {}", key)
                         }
                     }
+                }
+                Event::MotionNotify(ev) => {
+                    const SENSITIVITY: f32 = 0.001;
+
+                    if !mouse_held {
+                        continue;
+                    }
+
+                    if mouse_x_abs == i16::MIN && mouse_y_abs == i16::MIN {
+                        mouse_x_abs=ev.event_x;
+                        mouse_y_abs=ev.event_y;
+                        continue;
+                    }
+
+                    let delta_mouse_x = -(ev.event_x - mouse_x_abs);
+                    let delta_mouse_y = ev.event_y - mouse_y_abs;
+
+                    yaw -= delta_mouse_x as f32 * SENSITIVITY;
+                    pitch -= delta_mouse_y as f32 * SENSITIVITY;
+
+                    mouse_x_abs=ev.event_x;
+                    mouse_y_abs=ev.event_y;
                 }
                 Event::DestroyNotify(_) => return Ok(()),
                 _ => {}
@@ -206,20 +274,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { unsafe {
         angle_y += rotation_speed * delta;
         angle_z += rotation_speed * delta;
 
-        // Render
         gl::ClearColor(0.0, 0.0, 0.0, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         gl::UseProgram(program);
 
         if view_loc != -1 {
+            let front = Vec3::new(
+                yaw.cos() * pitch.cos(),
+                pitch.sin(),
+                yaw.sin() * pitch.cos(),
+            ).normalize();
+
             let eye = Vec3::new(cam_x, cam_y, cam_z);
-            let center = Vec3::new(0.0, 0.0, 0.0);
+            let center = eye + front;
+
             let up = Vec3::new(0.0, 1.0, 0.0);
+
             let view = Mat4::look_at_rh(eye, center, up); 
+
             gl::UniformMatrix4fv(view_loc, 1, gl::FALSE, view.to_cols_array().as_ptr());
         }
 
-        let proj = Mat4::orthographic_rh(-2.0, 2.0, -2.0, 2.0, -5.0, 5.0);
+        let aspect: f32 = (WIDTH as f32) / (HEIGHT as f32);
+        let fovy: f32 = 45.0f32.to_radians();
+        let proj: Mat4 = Mat4::perspective_rh(fovy, aspect, 0.1, 10.0);
         if proj_loc != -1 {
             gl::UniformMatrix4fv(proj_loc, 1, gl::FALSE, proj.to_cols_array().as_ptr());
         }
