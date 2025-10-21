@@ -1,6 +1,6 @@
 use std::os::raw::{c_int, c_void};
 
-use x11rb::{connection::Connection, protocol::{xproto::*, Event}, rust_connection::RustConnection};
+use x11rb::{connection::Connection, protocol::{xproto::{ConnectionExt, *}, Event}, rust_connection::RustConnection, wrapper::ConnectionExt as _};
 
 use crate::{glx, x11};
 
@@ -45,7 +45,7 @@ pub fn create(dpy: *mut c_void) -> Result<(RustConnection, u32), Box<dyn std::er
         depth,
         window,
         screen.root,
-        100, 100,
+        1280, 720,
         width,
         height,
         0,
@@ -56,6 +56,27 @@ pub fn create(dpy: *mut c_void) -> Result<(RustConnection, u32), Box<dyn std::er
             .background_pixel(screen.white_pixel)
             .event_mask(EventMask::KEY_PRESS | EventMask::STRUCTURE_NOTIFY),
     )?;
+
+    let net_wm_name = conn.intern_atom(false, b"_NET_WM_NAME")?.reply()?.atom;
+    let utf8_string = conn.intern_atom(false, b"UTF8_STRING")?.reply()?.atom;
+    conn.change_property8(
+        x11rb::protocol::xproto::PropMode::REPLACE,
+        window,
+        net_wm_name,
+        utf8_string,
+        b"GL Test",
+    )?;
+
+    let net_wm_window_type = conn.intern_atom(false, b"_NET_WM_WINDOW_TYPE")?.reply()?.atom;
+    let net_wm_window_type_dialog = conn.intern_atom(false, b"_NET_WM_WINDOW_TYPE_DIALOG")?.reply()?.atom;
+    conn.change_property32(
+        x11rb::protocol::xproto::PropMode::REPLACE,
+        window,
+        net_wm_window_type,
+        AtomEnum::ATOM,
+        &[net_wm_window_type_dialog],
+    )?;
+
     conn.map_window(window)?;
     conn.flush()?;
 
