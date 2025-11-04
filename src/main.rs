@@ -1,232 +1,15 @@
 pub mod glx;
 pub mod x11;
 pub mod window;
+pub mod shape;
 pub mod shader;
 
 use std::i16;
 
 use gl::types::GLuint;
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec3};
 
-fn setup_geometry() -> (u32, [u32; 2]) {
-    unsafe {
-        let positions: [Vec4; 36] = [
-            // Front
-            Vec4::new(-0.25, 0.25, -0.25, 1.0),
-            Vec4::new(-0.25, -0.25, -0.25, 1.0),
-            Vec4::new(0.25, -0.25, -0.25, 1.0),
-            Vec4::new(0.25, -0.25, -0.25, 1.0),
-            Vec4::new(0.25, 0.25, -0.25, 1.0),
-            Vec4::new(-0.25, 0.25, -0.25, 1.0),
-
-            // Right
-            Vec4::new(0.25, -0.25, -0.25, 1.0),
-            Vec4::new(0.25, -0.25, 0.25, 1.0),
-            Vec4::new(0.25, 0.25, -0.25, 1.0),
-            Vec4::new(0.25, -0.25, 0.25, 1.0),
-            Vec4::new(0.25, 0.25, 0.25, 1.0),
-            Vec4::new(0.25, 0.25, -0.25, 1.0),
-
-            // Back
-            Vec4::new(0.25, -0.25, 0.25, 1.0),
-            Vec4::new(-0.25, -0.25, 0.25, 1.0),
-            Vec4::new(0.25, 0.25, 0.25, 1.0),
-            Vec4::new(-0.25, -0.25, 0.25, 1.0),
-            Vec4::new(-0.25, 0.25, 0.25, 1.0),
-            Vec4::new(0.25, 0.25, 0.25, 1.0),
-
-            // Left
-            Vec4::new(-0.25, -0.25, 0.25, 1.0),
-            Vec4::new(-0.25, -0.25, -0.25, 1.0),
-            Vec4::new(-0.25, 0.25, 0.25, 1.0),
-            Vec4::new(-0.25, -0.25, -0.25, 1.0),
-            Vec4::new(-0.25, 0.25, -0.25, 1.0),
-            Vec4::new(-0.25, 0.25, 0.25, 1.0),
-
-            // Bottom
-            Vec4::new(-0.25, -0.25, 0.25, 1.0),
-            Vec4::new(0.25, -0.25, 0.25, 1.0),
-            Vec4::new(0.25, -0.25, -0.25, 1.0),
-            Vec4::new(0.25, -0.25, -0.25, 1.0),
-            Vec4::new(-0.25, -0.25, -0.25, 1.0),
-            Vec4::new(-0.25, -0.25, 0.25, 1.0),
-
-            // Top
-            Vec4::new(-0.25, 0.25, -0.25, 1.0),
-            Vec4::new(0.25, 0.25, -0.25, 1.0),
-            Vec4::new(0.25, 0.25, 0.25, 1.0),
-            Vec4::new(0.25, 0.25, 0.25, 1.0),
-            Vec4::new(-0.25, 0.25, 0.25, 1.0),
-            Vec4::new(-0.25, 0.25, -0.25, 1.0),
-        ];
-
-        let colours: [Vec4; 36] = [
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-
-            Vec4::new(1.0, 0.0, 1.0, 1.0),
-            Vec4::new(1.0, 0.0, 1.0, 1.0),
-            Vec4::new(1.0, 0.0, 1.0, 1.0),
-            Vec4::new(1.0, 0.0, 1.0, 1.0),
-            Vec4::new(1.0, 0.0, 1.0, 1.0),
-            Vec4::new(1.0, 0.0, 1.0, 1.0),
-
-            Vec4::new(0.0, 1.0, 1.0, 1.0),
-            Vec4::new(0.0, 1.0, 1.0, 1.0),
-            Vec4::new(0.0, 1.0, 1.0, 1.0),
-            Vec4::new(0.0, 1.0, 1.0, 1.0),
-            Vec4::new(0.0, 1.0, 1.0, 1.0),
-            Vec4::new(0.0, 1.0, 1.0, 1.0),
-        ];
-
-        let mut vao = 0;
-        let mut vbo = [0; 2];
-
-        gl::GenVertexArrays(1, &mut vao);
-        gl::GenBuffers(2, vbo.as_mut_ptr());
-        gl::BindVertexArray(vao);
-
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo[0]);
-        gl::BufferData(
-            gl::ARRAY_BUFFER,
-            std::mem::size_of_val(&positions) as isize,
-            positions.as_ptr() as *const _,
-            gl::STATIC_DRAW,
-        );
-        gl::VertexAttribPointer(0, 4, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
-        gl::EnableVertexAttribArray(0);
-
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo[1]);
-        gl::BufferData(
-            gl::ARRAY_BUFFER,
-            std::mem::size_of_val(&colours) as isize,
-            colours.as_ptr() as *const _,
-            gl::STATIC_DRAW,
-        );
-        gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
-        gl::EnableVertexAttribArray(1);
-
-        (vao, vbo)
-    }
-}
-
-fn setup_pyramid() -> (u32, [u32; 2]) {
-    unsafe {
-        let positions: [Vec4; 18] = [
-            // Base
-            Vec4::new(-0.25, 0.0, -0.25, 1.0),
-            Vec4::new(0.25, 0.0, -0.25, 1.0),
-            Vec4::new(0.25, 0.0, 0.25, 1.0),
-            Vec4::new(0.25, 0.0, 0.25, 1.0),
-            Vec4::new(-0.25, 0.0, 0.25, 1.0),
-            Vec4::new(-0.25, 0.0, -0.25, 1.0),
-
-            // Side 1
-            Vec4::new(-0.25, 0.0, -0.25, 1.0),
-            Vec4::new(0.25, 0.0, -0.25, 1.0),
-            Vec4::new(0.0, 0.5, 0.0, 1.0),
-
-            // Side 2
-            Vec4::new(0.25, 0.0, -0.25, 1.0),
-            Vec4::new(0.25, 0.0, 0.25, 1.0),
-            Vec4::new(0.0, 0.5, 0.0, 1.0),
-
-            // Side 3
-            Vec4::new(0.25, 0.0, 0.25, 1.0),
-            Vec4::new(-0.25, 0.0, 0.25, 1.0),
-            Vec4::new(0.0, 0.5, 0.0, 1.0),
-
-            // Side 4
-            Vec4::new(-0.25, 0.0, 0.25, 1.0),
-            Vec4::new(-0.25, 0.0, -0.25, 1.0),
-            Vec4::new(0.0, 0.5, 0.0, 1.0),
-        ];
-
-        let colours: [Vec4; 18] = [
-            // Base
-            Vec4::new(0.5, 0.5, 0.5, 1.0),
-            Vec4::new(0.5, 0.5, 0.5, 1.0),
-            Vec4::new(0.5, 0.5, 0.5, 1.0),
-            Vec4::new(0.5, 0.5, 0.5, 1.0),
-            Vec4::new(0.5, 0.5, 0.5, 1.0),
-            Vec4::new(0.5, 0.5, 0.5, 1.0),
-
-            // Side 1
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-            Vec4::new(1.0, 0.0, 0.0, 1.0),
-
-            // Side 2
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-            Vec4::new(0.0, 1.0, 0.0, 1.0),
-
-            // Side 3
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),
-
-            // Side 4
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-            Vec4::new(1.0, 1.0, 0.0, 1.0),
-        ];
-
-        let mut vao = 0;
-        let mut vbo = [0; 2];
-
-        gl::GenVertexArrays(1, &mut vao);
-        gl::GenBuffers(2, vbo.as_mut_ptr());
-        gl::BindVertexArray(vao);
-
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo[0]);
-        gl::BufferData(
-            gl::ARRAY_BUFFER,
-            std::mem::size_of_val(&positions) as isize,
-            positions.as_ptr() as *const _,
-            gl::STATIC_DRAW,
-        );
-        gl::VertexAttribPointer(0, 4, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
-        gl::EnableVertexAttribArray(0);
-
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo[1]);
-        gl::BufferData(
-            gl::ARRAY_BUFFER,
-            std::mem::size_of_val(&colours) as isize,
-            colours.as_ptr() as *const _,
-            gl::STATIC_DRAW,
-        );
-        gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
-        gl::EnableVertexAttribArray(1);
-
-        (vao, vbo)
-    }
-}
+use crate::shape::*;
 
 const TARGET_FPS: u64 = 60;
 const FRAME_TIME: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / TARGET_FPS);
@@ -265,8 +48,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         gl::Enable(gl::DEPTH_TEST);
 
         let program = shader::create_program();
-        let (vao, _vbo) = setup_geometry();
-        let (pyramid_vao, _pyramid_vbo) = setup_pyramid();
+        shader::set_current_program(program);
+
+        let shapes: Vec<Box<dyn Shape>> = vec![
+            Box::new(Cube::new()),
+            Box::new(Cube::new()),
+            Box::new(Pyramid::new()),
+            Box::new(Sphere::new()),
+        ];
 
         let model_loc = gl::GetUniformLocation(program, b"model\0".as_ptr() as *const _);
         let view_loc = gl::GetUniformLocation(program, b"view\0".as_ptr() as *const _);
@@ -398,7 +187,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let delta = now.duration_since(last_time).as_secs_f32();
             last_time = now;
             pyramid_time += delta;
-            let pyramid_y = pyramid_time.sin() * 0.5;
 
             angle.x += rotation_speed * delta;
             angle.y += rotation_speed * delta;
@@ -433,7 +221,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if model_loc != -1 {
                 // Cube 1
-                gl::BindVertexArray(vao);
+                let mut shape_iter = shapes.iter();
+
+                // Cube 1
                 let model1 = Mat4::IDENTITY
                     * Mat4::from_translation(trans)
                     * Mat4::from_translation(Vec3::new(-0.5, 0.0, 0.0))
@@ -441,8 +231,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     * Mat4::from_rotation_x(-angle.x)
                     * Mat4::from_rotation_y(angle.y)
                     * Mat4::from_rotation_z(angle.z);
-                gl::UniformMatrix4fv(model_loc, 1, gl::FALSE, model1.to_cols_array().as_ptr());
-                gl::DrawArrays(gl::TRIANGLES, 0, 36);
+                shape_iter.next().unwrap().draw(model1);
 
                 // Cube 2
                 let model2 = Mat4::IDENTITY
@@ -451,15 +240,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     * Mat4::from_rotation_x(-angle.x)
                     * Mat4::from_rotation_y(angle.y)
                     * Mat4::from_rotation_z(angle.z);
-                gl::UniformMatrix4fv(model_loc, 1, gl::FALSE, model2.to_cols_array().as_ptr());
-                gl::DrawArrays(gl::TRIANGLES, 0, 36);
+                shape_iter.next().unwrap().draw(model2);
 
                 // Pyramid
-                gl::BindVertexArray(pyramid_vao);
+                let pyramid_y = pyramid_time.sin() * 0.5;
                 let pyramid_model = Mat4::from_translation(Vec3::new(0.0, pyramid_y, -1.0))
                     * Mat4::from_rotation_y(pyramid_time);
-                gl::UniformMatrix4fv(model_loc, 1, gl::FALSE, pyramid_model.to_cols_array().as_ptr());
-                gl::DrawArrays(gl::TRIANGLES, 0, 18);
+                shape_iter.next().unwrap().draw(pyramid_model);
+
+                // Sphere
+                let sphere_model = Mat4::from_translation(Vec3::new(0.0, 0.0, -2.0))
+                    * Mat4::from_scale(Vec3::splat(0.7));
+                shape_iter.next().unwrap().draw(sphere_model);
             }
 
             glx::glXSwapBuffers(dpy, window);

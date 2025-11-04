@@ -1,4 +1,15 @@
 use std::{ffi::CString, fs, ptr};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+static CURRENT_PROGRAM: AtomicU32 = AtomicU32::new(0);
+
+pub fn set_current_program(program: u32) {
+    CURRENT_PROGRAM.store(program, Ordering::Relaxed);
+}
+
+pub fn get_current_program() -> u32 {
+    CURRENT_PROGRAM.load(Ordering::Relaxed)
+}
 
 pub fn load_shader(path: &str, shader_type: u32) -> u32 {
     let source = fs::read_to_string(path).expect(&format!("Failed to read '{}'", path));

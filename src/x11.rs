@@ -105,7 +105,7 @@ pub enum Event<'a> {
 }
 
 impl XEvent {
-    pub fn into_event(&self) -> Event {
+    pub fn into_event(&'_ self) -> Event<'_> {
         match self.event_type() {
             KEY_PRESS => Event::KeyPress(unsafe { &*(self as *const XEvent as *const XKeyEvent) }),
             KEY_RELEASE => Event::KeyRelease(unsafe { &*(self as *const XEvent as *const XKeyEvent) }),
